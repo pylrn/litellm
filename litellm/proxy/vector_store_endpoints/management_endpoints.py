@@ -34,7 +34,10 @@ from litellm.proxy._types import (
 from litellm.proxy.auth.user_api_key_auth import user_api_key_auth
 from litellm.proxy.common_utils.encrypt_decrypt_utils import decrypt_value_helper
 from litellm.proxy.common_utils.rbac_utils import check_feature_access_for_user
-from litellm.proxy.vector_store_endpoints.utils import can_user_access_vector_store
+from litellm.proxy.vector_store_endpoints.utils import (
+    assert_proxy_admin_for_user_supplied_vector_store_connection,
+    can_user_access_vector_store,
+)
 from litellm.repositories.model_repository import ModelRepository
 from litellm.repositories.prisma_protocols import TableActions
 from litellm.repositories.table_repositories import ManagedVectorStoresRepository
@@ -231,19 +234,17 @@ def _resolve_embedding_config_from_router(embedding_model: str, llm_router) -> E
                 if project_id:
                     embedding_config["project_id"] = project_id
 
-                resolved_model: Final = _provider_qualified_embedding_model(
-                    fallback=embedding_model,
-                    model=getattr(litellm_params, "model", None),
-                    custom_llm_provider=getattr(litellm_params, "custom_llm_provider", None),
-                )
-
                 # Only return config if we have at least api_key or api_base
                 if embedding_config:
                     verbose_proxy_logger.debug(
                         "Resolved embedding config from router model %s: %s", model_name, list(embedding_config.keys())
                     )
                     return (
-                        resolved_model,
+                        _provider_qualified_embedding_model(
+                            fallback=embedding_model,
+                            model=getattr(litellm_params, "model", None),
+                            custom_llm_provider=getattr(litellm_params, "custom_llm_provider", None),
+                        ),
                         embedding_config,
                     )
         except Exception as e:
@@ -337,13 +338,12 @@ async def _resolve_embedding_config_from_db(
                         model_name,
                         list(embedding_config.keys()),
                     )
-                    resolved_model: Final = _provider_qualified_embedding_model(
-                        fallback=embedding_model,
-                        model=decrypted_params.get("model"),
-                        custom_llm_provider=decrypted_params.get("custom_llm_provider"),
-                    )
                     return (
-                        resolved_model,
+                        _provider_qualified_embedding_model(
+                            fallback=embedding_model,
+                            model=decrypted_params.get("model"),
+                            custom_llm_provider=decrypted_params.get("custom_llm_provider"),
+                        ),
                         embedding_config,
                     )
         except Exception as e:
@@ -547,6 +547,13 @@ async def new_vector_store(
     - vector_store_metadata: Optional[Dict] - Additional metadata for the vector store
     """
     await check_feature_access_for_user(user_api_key_dict, "vector_stores")
+
+    litellm_params: Final = vector_store.get("litellm_params")
+    assert_proxy_admin_for_user_supplied_vector_store_connection(
+        custom_llm_provider=vector_store.get("custom_llm_provider"),
+        litellm_params=litellm_params,
+        user_api_key_dict=user_api_key_dict,
+    )
 
     from litellm.proxy.proxy_server import prisma_client
 

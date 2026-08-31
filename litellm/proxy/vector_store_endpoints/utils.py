@@ -52,6 +52,25 @@ def assert_proxy_admin_for_vector_store_index_management(
     )
 
 
+def assert_proxy_admin_for_user_supplied_vector_store_connection(
+    custom_llm_provider: object,
+    litellm_params: object,
+    user_api_key_dict: UserAPIKeyAuth,
+) -> None:
+    if (
+        custom_llm_provider != "milvus"
+        or not isinstance(litellm_params, dict)
+        or litellm_params.get("milvus_transport") != "grpc"
+    ):
+        return
+    if _is_proxy_admin(user_api_key_dict):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Only proxy admins can configure vector store connections. Contact your LiteLLM administrator.",
+    )
+
+
 def _suffix_after_index_name(request_path: str, index_name: str) -> str | None:
     """Return the path suffix after ``/indexes/{index_name}``, or None if absent."""
     match: Final = re.search(rf"/indexes/{re.escape(index_name)}(?=$|[/?])", request_path)

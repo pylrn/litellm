@@ -29,6 +29,7 @@ from litellm.proxy.vector_store_endpoints.management_endpoints import (
     new_vector_store,
 )
 from litellm.proxy.vector_store_endpoints.utils import (
+    assert_proxy_admin_for_user_supplied_vector_store_connection,
     check_vector_store_permission,
     is_allowed_to_call_vector_store_endpoint,
     is_allowed_to_call_vector_store_files_endpoint,
@@ -584,6 +585,22 @@ async def test_update_request_data_preserves_legacy_embedding_config_when_model_
 
     assert result["litellm_embedding_config"] == legacy_config
     resolve_mock.assert_awaited_once()
+
+
+def test_user_supplied_milvus_grpc_connection_requires_proxy_admin():
+    with pytest.raises(HTTPException) as exc_info:
+        assert_proxy_admin_for_user_supplied_vector_store_connection(
+            custom_llm_provider="milvus",
+            litellm_params={
+                "milvus_transport": "grpc",
+                "api_base": "http://internal-milvus:19530",
+            },
+            user_api_key_dict=UserAPIKeyAuth(
+                user_role=LitellmUserRoles.INTERNAL_USER
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
 
 
 class TestCheckVectorStorePermission:

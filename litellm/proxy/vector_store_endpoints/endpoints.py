@@ -18,6 +18,7 @@ from litellm.proxy.vector_store_endpoints.management_endpoints import (
     _resolve_embedding_config,
 )
 from litellm.proxy.vector_store_endpoints.utils import (
+    assert_proxy_admin_for_user_supplied_vector_store_connection,
     assert_proxy_admin_for_vector_store_index_management,
     assert_user_can_access_vector_store,
     get_litellm_managed_vector_store,
@@ -132,6 +133,11 @@ async def vector_store_search(
 
     data = await _read_request_body(request=request)
     data["vector_store_id"] = vector_store_id
+    assert_proxy_admin_for_user_supplied_vector_store_connection(
+        custom_llm_provider=data.get("custom_llm_provider"),
+        litellm_params=data,
+        user_api_key_dict=user_api_key_dict,
+    )
 
     # Check for legacy vector store registry (non-managed vector stores)
     data = await _update_request_data_with_litellm_managed_vector_store_registry(
