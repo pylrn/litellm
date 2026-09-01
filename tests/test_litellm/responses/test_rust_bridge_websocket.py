@@ -5,7 +5,7 @@ from collections.abc import Mapping
 import pytest
 
 from litellm.llms.custom_httpx.llm_http_handler import _rust_responses_websocket_enabled
-from litellm.rust_bridge import responses_websocket, streaming
+from litellm.rust_bridge import configuration, responses_websocket, streaming
 from litellm.types.router import GenericLiteLLMParams
 
 
@@ -53,9 +53,11 @@ class _FakeNativeBridge:
 def reset_streaming_capability():
     streaming.set_rust_streaming(capability=None)
     responses_websocket.set_rust_responses_websocket(connection=None)
+    configuration.reset_rust_configuration()
     yield
     streaming.set_rust_streaming(capability=None)
     responses_websocket.set_rust_responses_websocket(connection=None)
+    configuration.reset_rust_configuration()
 
 
 def test_rust_websocket_bridge_is_disabled_without_flag() -> None:
@@ -69,6 +71,20 @@ def test_injected_typed_capability_enables_the_gate() -> None:
         capability=lambda api, provider, transport: (api, provider, transport) == ("responses", "openai", "websocket")
     )
     assert _rust_responses_websocket_enabled("openai", GenericLiteLLMParams(rust=True))
+
+
+def test_explicit_false_overrides_process_enable() -> None:
+    streaming.set_rust_streaming(capability=lambda api, provider, transport: True)
+    configuration.use_litellm_rust(True)
+
+    assert not _rust_responses_websocket_enabled("openai", GenericLiteLLMParams(rust=False))
+
+
+def test_process_enable_applies_without_request_override() -> None:
+    streaming.set_rust_streaming(capability=lambda api, provider, transport: True)
+    configuration.use_litellm_rust(True)
+
+    assert _rust_responses_websocket_enabled("openai", GenericLiteLLMParams())
 
 
 @pytest.mark.asyncio

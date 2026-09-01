@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import ssl
 from collections.abc import AsyncIterator, Coroutine, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -160,7 +159,11 @@ def _rust_responses_websocket_enabled(
     custom_llm_provider: str | None,
     litellm_params: GenericLiteLLMParams,
 ) -> bool:
-    if custom_llm_provider != "openai" or litellm_params.get("rust") is not True:
+    from litellm.rust_bridge.configuration import rust_enabled
+
+    raw_request_override: Final = litellm_params.get("rust")
+    request_override: Final = raw_request_override if isinstance(raw_request_override, bool) else None
+    if custom_llm_provider != "openai" or not rust_enabled(request_override=request_override):
         return False
     from litellm.rust_bridge.streaming import supports_streaming
 
@@ -2369,10 +2372,6 @@ class BaseLLMHTTPHandler:
         )
 
     @staticmethod
-    def _rust_env_enabled() -> bool:
-        return os.getenv("LITELLM_RUST", "").strip().lower() in {"1", "true", "yes", "on"}
-
-    @staticmethod
     async def _maybe_rust_anthropic_messages(
         *,
         custom_llm_provider: str,
@@ -2387,7 +2386,11 @@ class BaseLLMHTTPHandler:
     ) -> AnthropicMessagesResponse | None:
         if custom_llm_provider not in ("azure_ai", "anthropic"):
             return None
-        if litellm_params.get("rust") is not True and not BaseLLMHTTPHandler._rust_env_enabled():
+        from litellm.rust_bridge.configuration import rust_enabled
+
+        raw_request_override: Final = litellm_params.get("rust")
+        request_override: Final = raw_request_override if isinstance(raw_request_override, bool) else None
+        if not rust_enabled(request_override=request_override):
             return None
         if has_agentic_hook:
             return None
